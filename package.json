@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/quick-filler/desafio-programador/issues"
   },
-  "homepage": "https://github.com/quick-filler/desafio-programador#readme"
+  "homepage": "https://github.com/quick-filler/desafio-programador#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
 }
