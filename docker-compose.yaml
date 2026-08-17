@@ -5,10 +5,33 @@ services:
       POSTGRES_USER: quickfiller
       POSTGRES_PASSWORD: quickfiller123
       POSTGRES_DB: quickfiller
-    ports: 
-      - "5432:5432" 
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  api:
+    build: .
+    command: node index.js
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: db
+    depends_on:
+      - db
+    volumes:
+      - uploads_data:/app/uploads
+
+  worker:
+    build: .
+    command: node worker.js
+    environment:
+      DB_HOST: db
+    depends_on:
+      - db
+    volumes:
+      - uploads_data:/app/uploads
+
 volumes:
   pgdata:
+  uploads_data:
