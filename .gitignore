@@ -1,6 +1,9 @@
 # Saídas geradas pela aplicação
 output/
 
+# Saídas geradas pelo usuário
+upload/
+
 # Ferramentas internas de correção (não publicar)
 avaliacao/
 

@@ -19,6 +19,11 @@
   "homepage": "https://github.com/quick-filler/desafio-programador#readme",
   "dependencies": {
     "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "pdf-to-png-converter": "^4.2.0",
+    "pg": "^8.23.0",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
   }
 }
