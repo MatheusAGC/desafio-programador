@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Quick Filler - Cartao de Ponto</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 22px; }
+  #status { margin: 20px 0; padding: 10px; border-radius: 4px; }
+  .status-pendente, .status-processando { background: #fff3cd; }
+  .status-concluido { background: #d4edda; }
+  .status-erro { background: #f8d7da; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: left; font-size: 14px; }
+  th { background: #f0f0f0; }
+  input[type=text] { width: 100%; box-sizing: border-box; }
+  button { padding: 8px 16px; margin-top: 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>Transcricao de Cartao de Ponto</h1>
+
+<form id="form-upload">
+  <input type="file" id="input-pdf" accept="application/pdf" required>
+  <button type="submit">Enviar PDF</button>
+</form>
+
+<div id="status" style="display:none;"></div>
+<div id="area-tabela"></div>
+
+<script>
+let idAtual = null;
+let intervaloPolling = null;
+
+const form = document.getElementById('form-upload');
+const divStatus = document.getElementById('status');
+const areaTabela = document.getElementById('area-tabela');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const arquivo = document.getElementById('input-pdf').files[0];
+  if (!arquivo) return;
+
+  const formData = new FormData();
+  formData.append('pdf', arquivo);
+  formData.append('tipo', 'cartao_ponto');
+
+  mostrarStatus('Enviando...', 'processando');
+
+  const resposta = await fetch('/api/transcricoes', { method: 'POST', body: formData });
+  const dados = await resposta.json();
+  idAtual = dados.id;
+
+  mostrarStatus('Enviado. Aguardando processamento...', 'pendente');
+  iniciarPolling();
+});
+
+function mostrarStatus(texto, classe) {
+  divStatus.style.display = 'block';
+  divStatus.className = 'status-' + classe;
+  divStatus.textContent = texto;
+}
+
+function iniciarPolling() {
+  if (intervaloPolling) clearInterval(intervaloPolling);
+  intervaloPolling = setInterval(consultarStatus, 2000);
+  consultarStatus();
+}
+
+async function consultarStatus() {
+  const resposta = await fetch(`/api/transcricoes/${idAtual}`);
+  const dados = await resposta.json();
+
+  mostrarStatus(`Status: ${dados.status}`, dados.status);
+
+  if (dados.status === 'concluido') {
+    clearInterval(intervaloPolling);
+    renderizarTabela(dados.resultado);
+  } else if (dados.status === 'erro') {
+    clearInterval(intervaloPolling);
+    areaTabela.innerHTML = '<p>Erro ao processar. Veja o campo resultado para detalhes.</p>';
+  }
+}
+
+function renderizarTabela(resultado) {
+  const dias = resultado.dias || [];
+
+  let html = '<table><thead><tr><th>Data</th><th>Batidas (separadas por vírgula)</th></tr></thead><tbody>';
+  dias.forEach((dia, i) => {
+    html += `<tr>
+      <td>${dia.data}</td>
+      <td><input type="text" data-idx="${i}" value="${(dia.batidas || []).join(', ')}"></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  html += '<button id="btn-salvar">Salvar correções</button> ';
+  html += `<a href="/api/transcricoes/${idAtual}/planilha" download><button type="button">Baixar planilha</button></a>`;
+
+  areaTabela.innerHTML = html;
+
+  document.getElementById('btn-salvar').addEventListener('click', async () => {
+    const inputs = areaTabela.querySelectorAll('input[data-idx]');
+    const diasAtualizados = dias.map((dia, i) => {
+      const valor = inputs[i].value;
+      const batidas = valor.split(',').map((s) => s.trim()).filter(Boolean);
+      return { data: dia.data, batidas };
+    });
+
+    const resultadoAtualizado = { ...resultado, dias: diasAtualizados };
+
+    await fetch(`/api/transcricoes/${idAtual}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resultado: resultadoAtualizado }),
+    });
+
+    alert('Correções salvas!');
+  });
+}
+</script>
+
+</body>
+</html>
