@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/quick-filler/desafio-programador#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
   }
 }
