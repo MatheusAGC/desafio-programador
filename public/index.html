@@ -7,7 +7,7 @@
   body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
   h1 { font-size: 22px; }
   #status { margin: 20px 0; padding: 10px; border-radius: 4px; }
-  .status-pendente, .status-processando { background: #fff3cd; }
+  .status-processando { background: #fff3cd; }
   .status-concluido { background: #d4edda; }
   .status-erro { background: #f8d7da; }
   table { border-collapse: collapse; width: 100%; margin-top: 20px; }
@@ -15,6 +15,7 @@
   th { background: #f0f0f0; }
   input[type=text] { width: 100%; box-sizing: border-box; }
   button { padding: 8px 16px; margin-top: 10px; cursor: pointer; }
+  h3 { margin-top: 24px; }
 </style>
 </head>
 <body>
@@ -43,7 +44,7 @@ form.addEventListener('submit', async (e) => {
   if (!arquivo) return;
 
   const formData = new FormData();
-  formData.append('arquivo', arquivo)
+  formData.append('arquivo', arquivo);
   formData.append('tipo', 'cartao-ponto');
 
   mostrarStatus('Enviando...', 'processando');
@@ -52,7 +53,7 @@ form.addEventListener('submit', async (e) => {
   const dados = await resposta.json();
   idAtual = dados.id;
 
-  mostrarStatus('Enviado. Aguardando processamento...', 'pendente');
+  mostrarStatus('Enviado. Aguardando processamento...', 'processando');
   iniciarPolling();
 });
 
@@ -79,21 +80,27 @@ async function consultarStatus() {
     renderizarTabela(dados.value);
   } else if (dados.status === 'erro') {
     clearInterval(intervaloPolling);
-    areaTabela.innerHTML = '<p>Erro ao processar. Veja o campo resultado para detalhes.</p>';
+    areaTabela.innerHTML = `<p>Erro ao processar: ${dados.erro || 'desconhecido'}</p>`;
   }
 }
 
-function renderizarTabela(resultado) {
-  const dias = resultado.dias || [];
+function renderizarTabela(value) {
+  const pages = value.pages || [];
+  let html = '';
 
-  let html = '<table><thead><tr><th>Data</th><th>Batidas (separadas por vírgula)</th></tr></thead><tbody>';
-  dias.forEach((dia, i) => {
-    html += `<tr>
-      <td>${dia.date_raw}</td>
-      <td><input type="text" data-idx="${i}" value="${(dia.punches || []).join(', ')}"></td>
-    </tr>`;
+  pages.forEach((pagina) => {
+    html += `<h3>Página ${pagina.page}</h3>`;
+    html += '<table><thead><tr><th>Data</th><th>Batidas (separadas por vírgula)</th></tr></thead><tbody>';
+    pagina.days.forEach((dia, i) => {
+      const horarios = (dia.punches || []).map((p) => p.time_hhmm).join(', ');
+      html += `<tr>
+        <td>${dia.date_raw}</td>
+        <td><input type="text" data-page="${pagina.page}" data-idx="${i}" value="${horarios}"></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
   });
-  html += '</tbody></table>';
+
   html += '<button id="btn-salvar">Salvar correções</button> ';
   html += `<a href="/api/transcricoes/${idAtual}/planilha" download><button type="button">Baixar planilha</button></a>`;
 
@@ -101,18 +108,27 @@ function renderizarTabela(resultado) {
 
   document.getElementById('btn-salvar').addEventListener('click', async () => {
     const inputs = areaTabela.querySelectorAll('input[data-idx]');
-    const diasAtualizados = dias.map((dia, i) => {
-      const valor = inputs[i].value;
-      const batidas = valor.split(',').map((s) => s.trim()).filter(Boolean);
-      return { data: dia.date_raw, batidas };
-    });
 
-    const resultadoAtualizado = { ...resultado, dias: diasAtualizados };
+    const valueAtualizado = JSON.parse(JSON.stringify(value));
+
+    inputs.forEach((input) => {
+      const pageNum = Number(input.dataset.page);
+      const idx = Number(input.dataset.idx);
+      const pagina = valueAtualizado.pages.find((p) => p.page === pageNum);
+      const dia = pagina.days[idx];
+
+      const horarios = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+      dia.punches = horarios.map((h, i) => ({
+        kind: i % 2 === 0 ? 'IN' : 'OUT',
+        time_raw: h,
+        time_hhmm: h,
+      }));
+    });
 
     await fetch(`/api/transcricoes/${idAtual}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resultado: resultadoAtualizado }),
+      body: JSON.stringify({ value: valueAtualizado }),
     });
 
     alert('Correções salvas!');
