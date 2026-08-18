@@ -89,8 +89,11 @@ app.get('/api/transcricoes/:id/planilha', async (req, res) => {
   res.send(buffer);
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
 
+if (process.env.RENDER) {
+  import('./worker.js'); // roda o worker no mesmo processo, so em producao/deploy
+}
