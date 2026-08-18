@@ -31,3 +31,37 @@ desenvolvimento.
   resolução de problemas de ambiente foi feita por mim, com orientação se fosse necessário.
 - A revisão dos dados extraídos contra o texto bruto dos PDFs  foi feita por mim, comparando a saída da 
   IA com o conteúdo real dos documentos de exemplo.
+
+  ## Perguntas do enunciado
+
+**1. Três decisões em que havia mais de uma resposta razoável — por que escolhi essa?**
+
+- *SQL puro (`pg`) vs. ORM (Prisma/Sequelize)*: escolhi SQL puro porque estava aprendendo
+  e queria entender a query real, não abstrair atrás de uma ferramenta. Custo: mais código
+  manual e mais superfície para erro de sintaxe.
+- *Um tipo de documento completo vs. dois tipos parciais*: o README recomenda explicitamente
+  cortar profundidade e manter os dois tipos parcialmente funcionais. Escolhi o oposto —
+  cartão de ponto parcialmente completo, holerite ausente — porque, dado o tempo real que tinha,
+  avaliei que dois pipelines de extração pela metade seria pior do que um funcionando de ponta a 
+  ponta e auditável. Reconheço que isso diverge da orientação do enunciado.
+- *Tesseract.js (WASM, local) vs. serviço de nuvem (AWS Textract)*: escolhi Tesseract.js para não
+  depender de credenciais de nuvem nem custo por chamada, aceitando um OCR provavelmente menos
+  preciso que um serviço comercial.
+
+**2. O que na minha solução quebra primeiro em produção?**
+
+O worker processa um item por vez, em loop com espera fixa e sob upload simultâneo de vários PDFs
+grandes, a fila cresce e o tempo de espera do usuário aumenta sem nenhum feedback de posição na 
+fila. Em paralelo, no plano gratuito do Render, o sistema de arquivos não é persistente — um 
+restart do serviço nesse meio-tempo perde os PDFs ainda não processados, com o registro no banco
+ficando preso em `processando` indefinidamente.
+
+**3. Onde eu não confio no que entreguei?**
+
+No parser de cartão de ponto em si, para qualquer documento fora do padrão exato dos exemplos que
+usei para construir e testar. Ele depende de padrões textuais específicos
+(`Mes/Ano :`, `N - ABREVIAÇÃO`) que provavelmente não existem em outros sistemas de ponto
+eletrônico. Também não confio na ausência de marcação `?` por caractere incerto — o parser não
+tem esse mecanismo, então um caractere mal lido pelo OCR hoje aparece como um valor errado
+silencioso, não como incerteza sinalizada, o que é exatamente o tipo de risco que o enunciado
+mais pede para evitar.
