@@ -1,5 +1,5 @@
 import express from 'express';
-import pool from './db.js';
+import pool, { garantirTabela } from './db.js';
 import multer from 'multer';
 import crypto from 'crypto';
 import XLSX from 'xlsx';
@@ -108,6 +108,8 @@ app.get('/api/transcricoes/:id/planilha', async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buffer);
 });
+
+await garantirTabela();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

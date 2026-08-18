@@ -12,4 +12,17 @@ const pool = process.env.DATABASE_URL
       database: 'quickfiller',
     });
 
+export async function garantirTabela() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS transcricoes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tipo TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'processando',
+      resultado JSONB,
+      criado_em TIMESTAMP NOT NULL DEFAULT now(),
+      caminho_arquivo TEXT
+    );
+  `);
+}
+
 export default pool;

@@ -1,4 +1,4 @@
-import pool from './db.js';
+import pool, { garantirTabela } from './db.js';
 import fs from 'fs';
 import { PDFParse } from 'pdf-parse';
 import { pdfToPng } from 'pdf-to-png-converter';
@@ -159,6 +159,7 @@ async function processarUm() {
 }
 
 async function loop() {
+  await garantirTabela();
   console.log('Worker iniciado. Verificando transcricoes pendentes...');
   while (true) {
     const processou = await processarUm();
