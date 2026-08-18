@@ -43,8 +43,8 @@ form.addEventListener('submit', async (e) => {
   if (!arquivo) return;
 
   const formData = new FormData();
-  formData.append('pdf', arquivo);
-  formData.append('tipo', 'cartao_ponto');
+  formData.append('arquivo', arquivo)
+  formData.append('tipo', 'cartao-ponto');
 
   mostrarStatus('Enviando...', 'processando');
 
@@ -76,7 +76,7 @@ async function consultarStatus() {
 
   if (dados.status === 'concluido') {
     clearInterval(intervaloPolling);
-    renderizarTabela(dados.resultado);
+    renderizarTabela(dados.value);
   } else if (dados.status === 'erro') {
     clearInterval(intervaloPolling);
     areaTabela.innerHTML = '<p>Erro ao processar. Veja o campo resultado para detalhes.</p>';
@@ -89,8 +89,8 @@ function renderizarTabela(resultado) {
   let html = '<table><thead><tr><th>Data</th><th>Batidas (separadas por vírgula)</th></tr></thead><tbody>';
   dias.forEach((dia, i) => {
     html += `<tr>
-      <td>${dia.data}</td>
-      <td><input type="text" data-idx="${i}" value="${(dia.batidas || []).join(', ')}"></td>
+      <td>${dia.date_raw}</td>
+      <td><input type="text" data-idx="${i}" value="${(dia.punches || []).join(', ')}"></td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -104,7 +104,7 @@ function renderizarTabela(resultado) {
     const diasAtualizados = dias.map((dia, i) => {
       const valor = inputs[i].value;
       const batidas = valor.split(',').map((s) => s.trim()).filter(Boolean);
-      return { data: dia.data, batidas };
+      return { data: dia.date_raw, batidas };
     });
 
     const resultadoAtualizado = { ...resultado, dias: diasAtualizados };

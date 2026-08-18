@@ -24,10 +24,17 @@ app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.post('/api/transcricoes', upload.single('pdf'), async(req, res) =>{
+app.post('/api/transcricoes', upload.single('arquivo'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ erro: 'arquivo (PDF) e obrigatorio' });
+  }
   const caminhoArquivo = req.file.path;
   const tipo = req.body.tipo;
-  const resultado = await pool.query( "INSERT INTO transcricoes (tipo, status, caminho_arquivo) VALUES ( $1, 'pendente', $2) RETURNING id", [tipo, caminhoArquivo]);
+
+  const resultado = await pool.query(
+    "INSERT INTO transcricoes (tipo, status, caminho_arquivo) VALUES ($1, 'processando', $2) RETURNING id",
+    [tipo, caminhoArquivo]
+  );
   const id = resultado.rows[0].id;
   res.status(202).json({ id });
 });
@@ -42,16 +49,24 @@ app.get('/api/transcricoes/:id', async (req, res) => {
   if (resultado.rows.length === 0) {
     return res.status(404).json({ erro: 'transcricao nao encontrada' });
   }
-  res.json(resultado.rows[0]);
+  const row = resultado.rows[0];
+  const erro = row.status === 'erro' ? (row.resultado?.erro || 'erro no processamento') : null;
+  res.json({
+    id: row.id,
+    tipo: row.tipo,
+    status: row.status,
+    erro,
+    value: row.status === 'concluido' ? row.resultado : null,
+  });
 });
 
 // PUT - usuario envia correcoes no resultado
 app.put('/api/transcricoes/:id', async (req, res) => {
   const { id } = req.params;
-  const { resultado } = req.body;
+  const { value } = req.body;
   const atualizado = await pool.query(
     'UPDATE transcricoes SET resultado = $1 WHERE id = $2 RETURNING id',
-    [JSON.stringify(resultado), id]
+    [JSON.stringify(value), id]
   );
   if (atualizado.rows.length === 0) {
     return res.status(404).json({ erro: 'transcricao nao encontrada' });
@@ -71,10 +86,18 @@ app.get('/api/transcricoes/:id/planilha', async (req, res) => {
   }
 
   const dados = resultado.rows[0].resultado;
-  const linhas = (dados.dias || []).map((dia) => ({
-    Data: dia.data,
-    Batidas: (dia.batidas || []).join(' | '),
-  }));
+  const linhas = [];
+  (dados.pages || []).forEach((pagina) => {
+    (pagina.days || []).forEach((dia) => {
+      const linha = { Data: dia.date_raw };
+      dia.punches.forEach((p, i) => {
+        const par = Math.floor(i / 2) + 1;
+        const label = p.kind === 'IN' ? `Entrada ${par}` : `Saída ${par}`;
+        linha[label] = p.time_hhmm;
+      });
+      linhas.push(linha);
+    });
+  });
 
   const planilha = XLSX.utils.json_to_sheet(linhas);
   const livro = XLSX.utils.book_new();
@@ -82,10 +105,7 @@ app.get('/api/transcricoes/:id/planilha', async (req, res) => {
   const buffer = XLSX.write(livro, { type: 'buffer', bookType: 'xlsx' });
 
   res.setHeader('Content-Disposition', `attachment; filename=transcricao-${id}.xlsx`);
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buffer);
 });
 

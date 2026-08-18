@@ -38,62 +38,97 @@ function parseCartaoPonto(texto) {
     ''
   );
 
-  const linhas = textoSemDuracao.split('\n');
-  let mesAtual = null;
-  let anoAtual = null;
-  let diaAtualChave = null;
-  const diasMap = new Map();
+  // pdf-parse separa paginas com "-- N of M --"; usamos isso pra saber a pagina de cada dia
+  const blocosPagina = textoSemDuracao.split(/-- (\d+) of \d+ --/);
+  // blocosPagina alterna: [textoAntes, "1", textoPagina1, "2", textoPagina2, ...]
 
   const regexMesAno = /Mes\/Ano\s*:\s*(\d{1,2})\s*\/\s*(\d{4})/;
   const regexDia = /^(\d{1,2})\s*-\s*([A-ZÇÃÕa-z]{3})\s*(.*)$/;
-  const regexHora = /(\d{2}:\d{2})/g;
-  const linhasIgnorar = /(Horario de Trabalho|Mes\/Ano|Assinado eletronicamente|Número do|Matricula|Unidade de Lotacao|Ass\.Respons|SIPON|F O L H A|Dia Semana Jornada|ID\.|Fls\.:|^-- \d|POEL,C|¯)/;
+  const linhasIgnorar = /(Horario de Trabalho|Mes\/Ano|Assinado eletronicamente|Número do|Matricula|Unidade de Lotacao|Ass\.Respons|SIPON|F O L H A|Dia Semana Jornada|ID\.|Fls\.:|POEL,C|¯)/;
 
-  for (const linhaRaw of linhas) {
-    const linha = linhaRaw.trim();
-    if (!linha) continue;
+  const pages = [];
+  let numeroPagina = 1;
 
-    const matchMesAno = linha.match(regexMesAno);
-    if (matchMesAno) {
-      mesAtual = matchMesAno[1].padStart(2, '0');
-      anoAtual = matchMesAno[2];
-      diaAtualChave = null;
-      continue;
-    }
+  for (let i = 0; i < blocosPagina.length; i++) {
+    // pula os indices que sao so o numero da pagina (capturados pelo split)
+    if (/^\d+$/.test(blocosPagina[i].trim()) && blocosPagina[i].trim().length < 3) continue;
 
-    if (linhasIgnorar.test(linha)) {
-      diaAtualChave = null;
-      continue;
-    }
+    const textoPagina = blocosPagina[i];
+    if (!textoPagina || !textoPagina.includes('Dia Semana')) continue;
 
-    const matchDia = linha.match(regexDia);
-    if (matchDia && mesAtual && anoAtual) {
-      const diaNum = matchDia[1].padStart(2, '0');
-      const resto = matchDia[3];
-      const horarios = [...resto.matchAll(regexHora)].map((m) => m[1]);
-      const batidas = horarios.slice(1); // primeiro horario = jornada esperada, nao e batida
+    const linhas = textoPagina.split('\n');
+    let mesAtual = null;
+    let anoAtual = null;
+    let diaAtualIdx = null;
+    const days = [];
 
-      const chave = `${diaNum}/${mesAtual}/${anoAtual}`;
-      if (!diasMap.has(chave)) diasMap.set(chave, []);
-      diasMap.get(chave).push(...batidas);
-      diaAtualChave = chave;
-      continue;
-    }
+    for (const linhaRaw of linhas) {
+      const linha = linhaRaw.trim();
+      if (!linha) continue;
 
-    if (diaAtualChave) {
-      const horariosContinuacao = [...linha.matchAll(/\d{2}:\d{2}/g)].map((m) => m[0]);
-      if (horariosContinuacao.length > 0) {
-        diasMap.get(diaAtualChave).push(...horariosContinuacao);
+      const matchMesAno = linha.match(regexMesAno);
+      if (matchMesAno) {
+        mesAtual = matchMesAno[1].padStart(2, '0');
+        anoAtual = matchMesAno[2];
+        diaAtualIdx = null;
+        continue;
+      }
+
+      if (linhasIgnorar.test(linha)) {
+        diaAtualIdx = null;
+        continue;
+      }
+
+      const matchDia = linha.match(regexDia);
+      if (matchDia && mesAtual && anoAtual) {
+        const diaNum = matchDia[1].padStart(2, '0');
+        const resto = matchDia[3];
+        const horarios = [...resto.matchAll(/\d{2}:\d{2}/g)].map((m) => m[0]);
+        const batidas = horarios.slice(1); // primeiro = jornada esperada, descarta
+
+        const dateRaw = `${diaNum}/${mesAtual}/${anoAtual}`;
+
+        // linha repetida (mesmo dia, continuacao com "N - DIA" de novo) -> mesmo indice
+        const existente = days.findIndex((d) => d.date_raw === dateRaw);
+        if (existente >= 0) {
+          adicionarPunches(days[existente], batidas);
+          diaAtualIdx = existente;
+        } else {
+          const novoDay = { date_raw: dateRaw, punches: [] };
+          adicionarPunches(novoDay, batidas);
+          days.push(novoDay);
+          diaAtualIdx = days.length - 1;
+        }
+        continue;
+      }
+
+      if (diaAtualIdx !== null) {
+        const horariosContinuacao = [...linha.matchAll(/\d{2}:\d{2}/g)].map((m) => m[0]);
+        if (horariosContinuacao.length > 0) {
+          adicionarPunches(days[diaAtualIdx], horariosContinuacao);
+        }
       }
     }
+
+    if (days.length > 0) {
+      pages.push({ page: numeroPagina, days });
+      numeroPagina++;
+    }
   }
-  const dias = [...diasMap.entries()].map(([data, batidas]) => ({ data, batidas }));
-  return { dias, texto_bruto: texto };
+
+  return { pages };
+}
+
+function adicionarPunches(day, horarios) {
+  horarios.forEach((h) => {
+    const kind = day.punches.length % 2 === 0 ? 'IN' : 'OUT';
+    day.punches.push({ kind, time_raw: h, time_hhmm: h });
+  });
 }
 
 async function processarUm() {
   const { rows } = await pool.query(
-    "SELECT id, caminho_arquivo FROM transcricoes WHERE status = 'pendente' AND caminho_arquivo IS NOT NULL LIMIT 1"
+    "SELECT id, caminho_arquivo FROM transcricoes WHERE status = 'processando' AND resultado IS NULL AND caminho_arquivo IS NOT NULL LIMIT 1"
   );
 
   if (rows.length === 0) return false; // nada pra fazer
