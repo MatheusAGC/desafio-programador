@@ -38,6 +38,9 @@
 - **Frontend**: uma página HTML/JS simples (sem framework), que faz upload, consulta o status
   periodicamente, exibe uma tabela editável com os dados extraídos, permite salvar
   correções e baixar a planilha final.
+- **Deploy no Render**: para otimizar o consumo no plano gratuito, o serviço roda a API HTTP 
+  e a fila de processamento no mesmo container Node.js, mantendo a execução via Docker Compose local 
+  isolada em dois serviços. https://desafio-programador-e3zr.onrender.com
 
 ## Honestidade dos dados
 
