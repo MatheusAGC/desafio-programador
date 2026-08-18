@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_USER: quickfiller
-      POSTGRES_PASSWORD: quickfiller123
-      POSTGRES_DB: quickfiller
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
@@ -13,10 +13,14 @@ services:
   api:
     build: .
     command: node index.js
+    restart: on-failure
     ports:
       - "3000:3000"
     environment:
       DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
     depends_on:
       - db
     volumes:
@@ -25,8 +29,12 @@ services:
   worker:
     build: .
     command: node worker.js
+    restart: on-failure
     environment:
       DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
     depends_on:
       - db
     volumes:

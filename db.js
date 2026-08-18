@@ -5,11 +5,11 @@ const { Pool } = pg;
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
   : new pg.Pool({
-      user: 'quickfiller',
-      password: 'quickfiller123',
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
       host: process.env.DB_HOST || 'localhost',
       port: 5432,
-      database: 'quickfiller',
+      database: process.env.DB_NAME,
     });
 
 export async function garantirTabela() {
